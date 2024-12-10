@@ -7,350 +7,198 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 
-delimiter = '##END'
-delimiter = ''.join(format(ord(char), '08b') for char in delimiter)
+delimiter_str = '##END'
+delimiter = np.unpackbits(
+    np.array([ord(char) for char in delimiter_str], dtype=np.uint8))
 image = cv2.imread('Lenna(test_image).png', 0)
 genetic_lock = Lock()
 pso_lock = Lock()
 
-best_particle = ''
-best_solution = ''
+best_particle = []
+best_solution = []
 
 
-secret_image = Image.open('Secret Lenna.png', 'r')
-secret_width, secret_height = secret_image.size
-secret_image = secret_image.convert('L')
-
-
-def create_chromosome():
-    chromosome = random.randint(0, 2097152)
-    binary_chromosome = format(chromosome, 'b')
-    while (len(binary_chromosome) < 21):
-        binary_chromosome = "0" + binary_chromosome
-    return binary_chromosome
-
-
-def transform_secret_image(secret_image, binary_chromosome):
-    binary_data = ''.join(format(pixel, '08b')
-                          for pixel in secret_image.tobytes())
-    if (binary_chromosome[1] == '1'):
-        binary_data = ''.join(
-            '1' if bit == '0' else '0' for bit in binary_data)
-    if (binary_chromosome[0] == '1'):
-        binary_data = binary_data[::-1]
-    return binary_data
-
-
-def transform_bits_image(binary_data, width, height, binary_chromosome):
-    mode = 'L'  # Grayscale mode
-
-    # Create an empty image
-    secret_image = Image.new(mode, (width, height))
-
-    if (binary_chromosome[1] == '1'):
-        binary_data = ''.join(
-            '1' if bit == '0' else '0' for bit in binary_data)
-    if (binary_chromosome[0] == '1'):
-        binary_data = binary_data[::-1]
-
-    # Parse the list of bits and set pixel values
-    pixels = [int(binary_data[i:i+8], 2)
-              for i in range(0, len(binary_data), 8)]
-    secret_image.putdata(pixels)
-    return secret_image
+def create_chromosome_array():
+    # Creates an array of 0s and 1s.
+   return np.random.choice([0, 1], size=(21,))
 
 
 def hide_bit(value, bit):
-    bin_pixel_str = format(value, 'b')
-    bin_pixel = list(bin_pixel_str)
-    if (bin_pixel[len(bin_pixel) - 1] != bit):
-        bin_pixel[len(bin_pixel) - 1] = bit
-    bin_pixel_str = "".join(bin_pixel)
-    return int(bin_pixel_str, 2)
-
+    return (value & ~1) | bit  # Replace the least significant bit.W
 
 def Encode(host, binary_message, binary_chromosome):
-    global delimiter
     height, width = host.shape
     transformed = host.copy()
-    index = 0
-    index2 = 0
-    # first direction
-    if (binary_chromosome[18:21] == "000"):
-        for h in range(int(binary_chromosome[2:10], 2), height):
-            for w in range(int(binary_chromosome[10:18], 2), width):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # second direction
-    elif (binary_chromosome[18:21] == "001"):
-        for w in range(int(binary_chromosome[10:18], 2), width):
-            for h in range(int(binary_chromosome[2:10], 2), height):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # third direction
-    elif (binary_chromosome[18:21] == "010"):
-        for h in range(int(binary_chromosome[2:10], 2), height):
-            for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # fourth direction
-    elif (binary_chromosome[18:21] == "011"):
-        for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-            for h in range(int(binary_chromosome[2:10], 2), height):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # fifth direction
-    elif (binary_chromosome[18:21] == "100"):
-        for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-            for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # sixth direction
-    elif (binary_chromosome[18:21] == "101"):
-        for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-            for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # seventh direction
-    elif (binary_chromosome[18:21] == "110"):
-        for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-            for w in range(int(binary_chromosome[10:18], 2), width):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
-    # eigth direction
-    elif (binary_chromosome[18:21] == "111"):
-        for w in range(int(binary_chromosome[10:18], 2), width):
-            for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-                if (index < len(binary_message)):
-                    transformed[h][w] = hide_bit(
-                        transformed[h][w], binary_message[index])
-                    index += 1
-                elif (index < len(binary_message) + len(delimiter)):
-                    if (index2 < len(delimiter)):
-                        transformed[h][w] = hide_bit(
-                            transformed[h][w], delimiter[index2])
-                        index2 += 1
+
+    start_h = int(''.join(map(str, binary_chromosome[2:10])), 2)
+    start_w = int(''.join(map(str, binary_chromosome[10:18])), 2)
+    direction = binary_chromosome[18:21]
+
+    rows, cols = get_traversal(start_h, start_w, direction, height, width)
+
+    message_idx, delimiter_idx = 0, 0
+    for h in rows:
+        for w in cols:
+            if message_idx < len(binary_message):
+                transformed[h, w] = hide_bit(transformed[h, w], binary_message[message_idx])
+                message_idx += 1
+            elif delimiter_idx < len(delimiter):
+                transformed[h, w] = hide_bit(transformed[h, w], delimiter[delimiter_idx])
+                delimiter_idx += 1
+            else:
+                return transformed
+
     return transformed
 
-
 def Decode(host, binary_chromosome):
-    global delimiter
     height, width = host.shape
-    binary_data = ""
-    # first direction
-    if (binary_chromosome[18:21] == "000"):
-        for h in range(int(binary_chromosome[2:10], 2), height):
-            for w in range(int(binary_chromosome[10:18], 2), width):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # second direction
-    elif (binary_chromosome[18:21] == "001"):
-        for w in range(int(binary_chromosome[10:18], 2), width):
-            for h in range(int(binary_chromosome[2:10], 2), height):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # third direction
-    elif (binary_chromosome[18:21] == "010"):
-        for h in range(int(binary_chromosome[2:10], 2), height):
-            for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # fourth direction
-    elif (binary_chromosome[18:21] == "011"):
-        for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-            for h in range(int(binary_chromosome[2:10], 2), height):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # fifth direction
-    elif (binary_chromosome[18:21] == "100"):
-        for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-            for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # sixth direction
-    elif (binary_chromosome[18:21] == "101"):
-        for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-            for w in range(width - 1 - int(binary_chromosome[10:18], 2), 0, -1):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # seventh direction
-    elif (binary_chromosome[18:21] == "110"):
-        for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-            for w in range(int(binary_chromosome[10:18], 2), width):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
-    # eigth direction
-    elif (binary_chromosome[18:21] == "111"):
-        for w in range(int(binary_chromosome[10:18], 2), width):
-            for h in range(height - 1 - int(binary_chromosome[2:10], 2), 0, -1):
-                if (binary_data[-40:] != delimiter):
-                    bin_pixel_str = format(host[h][w], 'b')
-                    bin_pixel = list(bin_pixel_str)
-                    binary_data += bin_pixel[len(bin_pixel) - 1]
-                else:
-                    break
 
-    return binary_data[:-40]
+    start_h = int(''.join(map(str, binary_chromosome[2:10])), 2)
+    start_w = int(''.join(map(str, binary_chromosome[10:18])), 2)
+    direction = binary_chromosome[18:21]
 
-correct_counter = 0
-def fitness_function(binary_chromosome):
-    global image, secret_image, correct_counter, delimiter
-    message = "A3FZ9YBQ" * 100  # 2 MB of 'A'
+    rows, cols = get_traversal(start_h, start_w, direction, height, width)
 
-    #binary_data = ''.join(format(ord(c), '08b') for c in message)
-    binary_data = ''.join(random.choice(['0', '1']) for _ in range(131072))
-    secret = Encode(image, binary_data, binary_chromosome)
-    decoded_data = Decode(secret, binary_chromosome)
-    original_binary_data = image_to_binary_data(image)
-    secret_binary_data = image_to_binary_data(secret)
-    if (binary_data == decoded_data):correct_counter+=1
-    psnr = cv2.PSNR(image, secret)
-    ber = calculate_BER(original_binary_data, secret_binary_data)
-    return psnr, ber
+    max_bits = height * width * 8
+    binary_data = np.zeros(max_bits, dtype=np.uint8)
+    idx = 0
 
-# Modified genetic and pso functions to track performance
-# Function to convert an image to binary data
+    for h in rows:
+        for w in cols:
+            if np.array_equal(binary_data[idx - len(delimiter):idx], delimiter):
+                return binary_data[:idx - len(delimiter)]
+            bin_pixel_str = format(host[h, w], '08b')
+            binary_data[idx] = int(bin_pixel_str[-1])
+            idx += 1
 
+    return binary_data[:idx - len(delimiter)] if np.array_equal(binary_data[idx - len(delimiter):idx], delimiter) else binary_data[:idx]
+
+def get_traversal(start_h, start_w, direction, height, width):
+# Convert direction to an integer to simplify comparisons
+    direction_code = direction[0] * 4 + direction[1] * 2 + direction[2]  # e.g., [1,0,0] becomes 4, [0,0,0] becomes 0
+    
+    if direction_code == 0:  # Down-Right
+        return range(start_h, height), range(start_w, width)
+    elif direction_code == 1:  # Right-Down
+        return range(start_w, width), range(start_h, height)
+    elif direction_code == 2:  # Down-Left
+        return range(start_h, height), range(width - 1 - start_w, -1, -1)
+    elif direction_code == 3:  # Left-Down
+        return range(width - 1 - start_w, -1, -1), range(start_h, height)
+    elif direction_code == 4:  # Left-Up
+        return range(width - 1 - start_w, -1, -1), range(height - 1 - start_h, -1, -1)
+    elif direction_code == 5:  # Up-Left
+        return range(height - 1 - start_h, -1, -1), range(width - 1 - start_w, -1, -1)
+    elif direction_code == 6:  # Up-Right
+        return range(height - 1 - start_h, -1, -1), range(start_w, width)
+    elif direction_code == 7:  # Right-Up
+        return range(start_w, width), range(height - 1 - start_h, -1, -1)
 
 def image_to_binary_data(image):
-    pixels = np.array(image).flatten()
-    binary_data = ''.join(format(pixel, '08b') for pixel in pixels)
-    return binary_data
+    return np.unpackbits(image.astype(np.uint8))
 
-def genetic_with_tracking():
+def hide_bit(pixel, bit):
+    return (pixel & ~1) | bit
+
+# def fitness_function(binary_chromosome):
+#     global image, secret_image, correct_counter, delimiter
+#     message = "A3FZ9YBQ" * 100  # 2 MB of 'A'
+
+#     #binary_data = ''.join(format(ord(c), '08b') for c in message)
+#     binary_data = ''.join(random.choice(['0', '1']) for _ in range(131072))
+#     secret = Encode(image, binary_data, binary_chromosome)
+#     decoded_data = Decode(secret, binary_chromosome)
+#     original_binary_data = image_to_binary_data(image)
+#     secret_binary_data = image_to_binary_data(secret)
+#     if (binary_data == decoded_data):correct_counter+=1
+#     psnr = cv2.PSNR(image, secret)
+#     ber = calculate_BER(original_binary_data, secret_binary_data)
+#     return psnr, ber
+
+binary_data = np.random.randint(0, 2, 87500, dtype=np.uint8)
+def fitness_function_array(chromosome):
+    global image, secret_image, delimiter, correct_counter, binary_data
+
+    # Generate random binary message.
+    # 131072 bits (16KB).
+    
+
+    # Encode the secret into the image.
+    secret = Encode(image, binary_data, chromosome)
+
+    # decoded_data = Decode(secret, chromosome)
+    # if np.array_equal(binary_data, decoded_data):
+    #     print("CORRECT")
+    original_binary_data = image_to_binary_data(image)
+    secret_binary_data = image_to_binary_data(secret)
+    psnr = cv2.PSNR(image, secret)
+    ber = calculate_BER(original_binary_data, secret_binary_data)
+    #ber = 0
+    return psnr, ber
+
+
+# def image_to_binary_data(image):
+#     pixels = np.array(image).flatten()
+#     binary_data = ''.join(format(pixel, '08b') for pixel in pixels)
+#     return binary_data
+
+def genetic_with_tracking_array():
     global best_solution
     population_size = 50
     num_generations = 100
     mutation_rate = 0.3
-    population = [create_chromosome() for _ in range(population_size)]
+    num_bits = 21
+    population = [create_chromosome_array() for _ in range(population_size)]
     psnr_values = []
     ber_values = []
 
+    # Initial best solution
+    best_individual = population[0]
+
     for generation in range(num_generations):
         # Calculate fitness scores and store them for tracking
-        fitness_scores = [fitness_function(x)[0] for x in population]
-        # Track the highest PSNR for this generation
-        psnr_values.append(max(fitness_scores))
+        fitness_scores = [fitness_function_array(chromosome)[0] for chromosome in population]
+        psnr_values.append(max(fitness_scores))  # Track PSNR of the best individual
         best_individual = population[np.argmax(fitness_scores)]
-        # Track BER of the best individual
-        ber_values.append(fitness_function(best_individual)[1])
+        ber_values.append(fitness_function_array(best_individual)[1])  # Track BER
 
-        # Select parents for the next generation based on their fitness
-        selected_parents = random.choices(
-            population, weights=fitness_scores, k=population_size)
+        # Selection: Select parents based on fitness scores
+        selected_parents = random.choices(population, weights=fitness_scores, k=population_size)
 
-        # Create offspring using crossover
+        # Crossover: Generate offspring using crossover
         offspring = []
         for i in range(0, population_size, 2):
             parent1 = selected_parents[i]
             parent2 = selected_parents[i + 1]
-            crossover_point = random.randint(1, 21 - 1)
-            offspring1 = parent1[:crossover_point] + parent2[crossover_point:]
-            offspring2 = parent2[:crossover_point] + parent1[crossover_point:]
+            crossover_point = np.random.randint(1, num_bits - 1)
+            offspring1 = np.concatenate([parent1[:crossover_point], parent2[crossover_point:]])
+            offspring2 = np.concatenate([parent2[:crossover_point], parent1[crossover_point:]])
             offspring.extend([offspring1, offspring2])
 
-        # Apply mutation
+        # Mutation: Apply mutation to the offspring
         for i in range(population_size):
-            for j in range(21):
-                if random.random() < mutation_rate:
-                    offspring[i] = offspring[i][:j] + \
-                        ("0" if offspring[i][j] ==
-                         "1" else "1") + offspring[i][j+1:]
+            for j in range(num_bits):
+                if np.random.random() < mutation_rate:
+                    offspring[i][j] = 1 - offspring[i][j]
 
-        # Add the best individual of the current generation to the new offspring (promotion)
+        # Elitism: Ensure the best individual is retained at the end of the new population
         best_fitness_index = np.argmax(fitness_scores)
         best_chromosome = population[best_fitness_index]
 
-        # Ensure best individual is part of the new population
-        # Replace the worst individual with the best if necessary
-        # Place the best individual in the first position
-        offspring[0] = best_chromosome
-        population = offspring  # Set new population for the next generation
+        # Add the best individual from the previous generation to the new population
+        offspring[-1] = best_chromosome
+        population = offspring  # Set the new population for the next generation
 
-    # After all generations, the best solution found is the one with the highest fitness score
-    best_solution = max(population, key=lambda x: fitness_function(x)[0])
-    print(f"Genetic : {best_solution}")
+    best_solution = max(population, key=lambda x: fitness_function_array(x)[0])
     return psnr_values, ber_values
 
 
-def pso_with_tracking():
+
+
+
+
+# The main PSO function with improvements
+def pso_with_tracking_array():
     num_particles = 50
     num_dimensions = 21  # Number of bits in each binary string (chromosome)
     max_iterations = 100
@@ -358,53 +206,64 @@ def pso_with_tracking():
     global_best_position = None
 
     # Initialize particles with random binary strings (0s and 1s)
-    particles = [create_chromosome() for _ in range(num_particles)]
+    particles = [create_chromosome_array() for _ in range(num_particles)]
     velocities = [[random.uniform(-1, 1) for _ in range(num_dimensions)]
-                  for _ in range(num_particles)]
-    best_positions = particles[:]
+                  for _ in range(num_particles)]    
+    best_positions = particles[:]  # Initialize best positions with initial particles
+    best_fitness = [fitness_function_array(p)[0] for p in particles]  # Track fitness for personal bests
+
+    # PSNR and BER tracking for the global best solution
     psnr_values = []
     ber_values = []
 
+    # Initial best solution for elitism
+    fitness_scores = [fitness_function_array(p)[0] for p in particles]
+    global_best_position = particles[np.argmax(fitness_scores)]
+
+    # PSO main loop
     for iteration in range(max_iterations):
         for i in range(num_particles):
-            # Calculate fitness for the current particle
-            fitness = fitness_function(particles[i])[0]
+            fitness = fitness_function_array(particles[i])[0]
 
             # Update the personal best if fitness improves
-            if fitness_function(best_positions[i])[0] < fitness:
-                best_positions[i] = particles[i]
+            if fitness > best_fitness[i]:
+                best_fitness[i] = fitness
+                best_positions[i] = particles[i].copy()
 
             # Update the global best if fitness improves
-            if global_best_position is None or fitness_function(global_best_position)[0] < fitness:
-                global_best_position = particles[i]
+            if global_best_position is None or fitness > fitness_function_array(global_best_position)[0]:
+                global_best_position = particles[i].copy()
 
         # Record PSNR and BER for the global best solution
-        psnr_values.append(fitness_function(global_best_position)[0])
-        ber_values.append(fitness_function(global_best_position)[1])
+        psnr_values.append(fitness_function_array(global_best_position)[0])
+        ber_values.append(fitness_function_array(global_best_position)[1])
 
+        # Inertia weight for velocity stability
+        w = 0.9 - (0.5 * iteration / max_iterations)  # Decaying inertia weight
+        
         # Update velocities and positions for each particle
         for i in range(num_particles):
             for j in range(num_dimensions):
                 r1, r2 = random.random(), random.random()
+                
                 # Cognitive and social components of velocity update
-                cognitive = c1 * r1 * \
-                    (int(best_positions[i][j]) - int(particles[i][j]))
-                social = c2 * r2 * \
-                    (int(global_best_position[j]) - int(particles[i][j]))
-                velocities[i][j] += cognitive + social
+                cognitive = c1 * r1 * (int(best_positions[i][j]) - int(particles[i][j]))
+                social = c2 * r2 * (int(global_best_position[j]) - int(particles[i][j]))
+                
+                # Apply inertia weight and update the velocity
+                velocities[i][j] = w * velocities[i][j] + cognitive + social
+
+                # Clip velocities to prevent large updates
+                velocities[i][j] = np.clip(velocities[i][j], -4, 4)
 
                 # Update position: flip the bit with probability derived from the velocity
-                # Update the bit position based on the sign of the velocity
-                # Apply sigmoid to decide flip probability
-                if random.random() < 1 / (1 + np.exp(-velocities[i][j])):
-                    # Flip the bit
-                    particles[i] = particles[i][:j] + \
-                        ('1' if particles[i][j] ==
-                         '0' else '0') + particles[i][j+1:]
-
-    print(f"PSO : {global_best_position}")
+                probability = 1 / (1 + np.exp(-velocities[i][j]))  # Sigmoid-based update
+                if np.random.random() < probability:
+                    particles[i][j] = 1 - particles[i][j]  # Flip the bit
 
     return psnr_values, ber_values
+
+
 
 
 
@@ -418,7 +277,7 @@ def run_genetic():
     print("Starting Genetic Algorithm")
     try:
         start_time = time.time()
-        g_psnr, g_ber = genetic_with_tracking()
+        g_psnr, g_ber = genetic_with_tracking_array()
         with lock:
             genetic_times.append(time.time() - start_time)
             genetic_psnr.append(g_psnr)
@@ -433,7 +292,7 @@ def run_pso():
     print("Starting PSO")
     try:
         start_time = time.time()
-        p_psnr, p_ber = pso_with_tracking()
+        p_psnr, p_ber = pso_with_tracking_array()
         with lock:
             pso_times.append(time.time() - start_time)
             pso_psnr.append(p_psnr)
@@ -448,8 +307,12 @@ def calculate_BER(original, received):
     if len(original) != len(received):
         raise ValueError("Both binary sequences must have the same length.")
 
-    # Count bit errors
-    bit_errors = sum(o != r for o, r in zip(original, received))
+    # Count bit errors using NumPy
+    bit_errors = np.count_nonzero(original != received)
+
+    # Calculate BER
+    total_bits = original.size
+    ber = bit_errors / total_bits
 
     # Calculate BER
     total_bits = len(original)
@@ -541,4 +404,3 @@ def compare_algorithms():
 
 
 compare_algorithms()
-print(f"Correct : {correct_counter}")
